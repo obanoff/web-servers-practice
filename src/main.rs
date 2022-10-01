@@ -4,9 +4,9 @@ use std:: {
     net::{TcpListener, TcpStream},
     thread,
     time::Duration,
+    process,
 };
 
-use std::process;
 use web_server::ThreadPool;
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
         process::exit(1);
     });
 
-    let pool = ThreadPool::build(4).unwrap_or_else(|err| {
+     let pool = ThreadPool::build(4).unwrap_or_else(|err| {
         println!("Problem spawning threads: {err}");
         process::exit(1);
     });
@@ -33,7 +33,9 @@ fn main() {
     }
 
     println!("Shutting down"); 
+
 }
+
 
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
@@ -56,13 +58,6 @@ fn handle_connection(mut stream: TcpStream) {
     );
     stream.write_all(response.as_bytes()).unwrap();
 }
-
-
-
-
-
-
-
 
 
 

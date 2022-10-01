@@ -12,15 +12,6 @@ pub struct ThreadPool {
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 impl ThreadPool {
-    pub fn execute<F>(&self, f: F) 
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        let job: Job = Box::new(f);
-
-        self.sender.as_ref().unwrap().send(job).unwrap(); 
-    }
-
     //🔴optional my own implementation instead of new, to handle errors more efficent:
     pub fn build(size: usize) -> Result<Self, &'static str> {
         match size {
@@ -42,31 +33,14 @@ impl ThreadPool {
             }
         }
     }
-}
 
+    pub fn execute<F>(&self, f: F) 
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job: Job = Box::new(f);
 
-struct Worker {
-    id: usize,
-    thread: Option<JoinHandle<()>>, 
-}
-
-impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
-        let thread = thread::spawn(move || loop {
-            match receiver.lock().unwrap().recv() {
-                Ok(job) => {
-                    println!("Worker {id} got a job; executing.");
-
-                    job();
-                },
-                Err(_) => {
-                    println!("Worker {id} disconnected; shutting down.");
-                    break;
-                },
-            }
-        });
-
-        Worker { id, thread: Some(thread) } 
+        self.sender.as_ref().unwrap().send(job).unwrap(); 
     }
 }
 
@@ -84,24 +58,32 @@ impl Drop for ThreadPool {
     }
 }
 
+struct Worker {
+    id: usize,
+    thread: Option<JoinHandle<()>>, 
+}
 
+impl Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
+        let thread = thread::spawn(move || loop {
+            let message = receiver.lock().unwrap().recv();
 
+            match message {  
+                Ok(job) => {
+                    println!("Worker {id} got a job; executing.");
 
+                    job();
+                },
+                Err(_) => {
+                    println!("Worker {id} disconnected; shutting down.");
+                    break;
+                },
+            }
+        });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        Worker { id, thread: Some(thread) } 
+    }
+}
 
 
 
