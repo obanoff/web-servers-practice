@@ -10,22 +10,29 @@ use std::process;
 use web_server::ThreadPool;
 
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap_or_else(|err| {
+        println!("Cannot set connection on this address: {err}");
+        process::exit(1);
+    });
 
-    // let pool = ThreadPool::new(4);
-    
     let pool = ThreadPool::build(4).unwrap_or_else(|err| {
         println!("Problem spawning threads: {err}");
         process::exit(1);
     });
 
+    // for stream in listener.incoming().take(2) { // to see code in action, 2 request and gracefull shutting down
     for stream in listener.incoming() {
-        let stream = stream.unwrap();
+        let stream = stream.unwrap_or_else(|err| {
+            println!("Problem encountered: {err}");
+            process::exit(1);
+        });
 
         pool.execute(|| {
             handle_connection(stream);
         });
     }
+
+    println!("Shutting down"); 
 }
 
 fn handle_connection(mut stream: TcpStream) {

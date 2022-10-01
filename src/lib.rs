@@ -6,7 +6,7 @@ use std::{
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: Option<mpsc::Sender<Job>>,
 }
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
@@ -18,27 +18,27 @@ impl ThreadPool {
     {
         let job: Job = Box::new(f);
 
-        self.sender.send(job).unwrap();
+        self.sender.as_ref().unwrap().send(job).unwrap(); 
     }
 
     //🔴optional my own implementation instead of new, to handle errors more efficent:
     pub fn build(size: usize) -> Result<Self, &'static str> {
-        match size > 0 {
-            false => Err("number of threads cannot be zero"),
-            true => {
+        match size {
+            n if n == 0 => Err("number of threads cannot be zero"),
+            n => {
                 let (sender, receiver) = mpsc::channel();
 
                 let receiver = Arc::new(Mutex::new(receiver));
 
                 let mut workers = Vec::with_capacity(size);
                 
-                for id in 0..size {
+                for id in 0..n {
                     let worker = Worker::new(id, Arc::clone(&receiver));
 
                     workers.push(worker);
                 }
 
-                Ok(ThreadPool { workers, sender })
+                Ok(ThreadPool { workers, sender: Some(sender) })
             }
         }
     }
@@ -53,11 +53,17 @@ struct Worker {
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
         let thread = thread::spawn(move || loop {
-            let job: Job = receiver.lock().unwrap().recv().unwrap();
+            match receiver.lock().unwrap().recv() {
+                Ok(job) => {
+                    println!("Worker {id} got a job; executing.");
 
-            println!("Worker {id} got a job; executing.");
-
-            job();
+                    job();
+                },
+                Err(_) => {
+                    println!("Worker {id} disconnected; shutting down.");
+                    break;
+                },
+            }
         });
 
         Worker { id, thread: Some(thread) } 
@@ -66,6 +72,8 @@ impl Worker {
 
 impl Drop for ThreadPool {
     fn drop(&mut self) {
+        drop(self.sender.take());
+
         for worker in &mut self.workers {
             println!("Shutting down worker {}", worker.id);
 
